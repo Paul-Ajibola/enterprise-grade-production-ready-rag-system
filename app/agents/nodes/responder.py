@@ -4,8 +4,10 @@ from app.config import settings
 from langchain_groq import ChatGroq
 
 # Direct Groq call - the LLM Gateway 
-# (Portkey routing/fallback/caching) arrives in a later stage
+# (Portkey routing/fallback/caching) will arrive in a later stage
 llm = ChatGroq(api_key=settings.GROQ_API_KEY, model=settings.GROQ_MODEL, temperature=0.1)
+#  lower temperature because it is preferably to be deterministic, than probabilistic
+
 
 # function to generate node
 def generate_node(state: AgentState):
@@ -72,3 +74,5 @@ def generate_node(state: AgentState):
 
         except Exception as e:
             logfire.error(f"LLM Generation failed: {e}")
+
+
