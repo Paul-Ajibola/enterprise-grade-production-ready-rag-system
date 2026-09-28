@@ -1,5 +1,4 @@
 #----CORE API AND WEB FRAMEWORK
-fastapi
 uvicorn[standard]
 python-dotenv
 requests         # for HTTP library for internal or external API calls
@@ -26,11 +25,7 @@ pydantic>=2.0.0             # Data validation and setting
 
 # -------- CORE API AND WEB FRAMEWORK ----------
 fastapi      # High-performance web framework
-uvicorn[standard]      # ASGI server to run the FastAPI
-python-dotenv    # For loading configuration ..
-requests        # HTTP library for internal/external interaction
 streamlit      # Frontend chat interface
-numpy           # Numerical processing
 
 
 # -----DATA INGESTION AND DOCUMENT PARSING
@@ -53,7 +48,6 @@ langsmith                       # Specialized tracking for LangChain/LangGraph
 flashrank
 
 # ADD UVICORN FOR BACKEND PROCESS (FASTAPI)
-uvicorn
 
 
 # ------ GUARDRAILS ------

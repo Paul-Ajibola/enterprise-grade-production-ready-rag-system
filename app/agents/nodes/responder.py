@@ -74,5 +74,11 @@ def generate_node(state: AgentState):
 
         except Exception as e:
             logfire.error(f"LLM Generation failed: {e}")
+            return {
+                "final_answer": "I apologize, but I encountered an internal error while processing.",
+                "status": "error",
+                "plan": state["plan"] + ["LLM generation failed"],
+                "messages": [{"role": "assistant", "content": "I apologize, but I encountered an internal error while processing."}]
+            }
 
 

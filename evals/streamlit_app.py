@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logfire
-logfire.configure(tokens=os.getenv("LOGFIRE_TOKEN"), service_name="evals")
+logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), service_name="evals")
 
 
 # import

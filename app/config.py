@@ -38,10 +38,10 @@ class Settings:
 
 
 #  Apply LangChain environment variables for automatic tracing
-os.environ["LANGSMITH_TRACING"] = os.getenv("LANGSMITH_TRACING", )
-os.environ["LANGSMITH_API_KEY"] = os.getenv("LANGSMITH_API_KEY", )
-os.environ["LANGSMITH_PROJECT"] = os.getenv("LANGSMITH_PROJECT", )
-os.environ["LANGSMITH_ENDPOINT"] = os.getenv("LANGSMITH_ENDPOINT", )
+os.environ["LANGSMITH_TRACING"] = Settings.LANGSMITH_TRACING
+os.environ["LANGSMITH_API_KEY"] = Settings.LANGSMITH_API_KEY
+os.environ["LANGSMITH_PROJECT"] = Settings.LANGSMITH_PROJECT
+os.environ["LANGSMITH_ENDPOINT"] = Settings.LANGSMITH_ENDPOINT
 
 
 # Instantiate the `Settings` class  

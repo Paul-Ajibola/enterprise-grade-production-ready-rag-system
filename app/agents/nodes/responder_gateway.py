@@ -1,6 +1,6 @@
 import logfire
 from app.agents.state import AgentState
-from app.gateway import portkey_client, extract_cache_status
+from app.gateways.client import portkey_client, extract_cache_status
 
 
 # function to generate node

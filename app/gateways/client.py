@@ -34,7 +34,7 @@ portkey_client = Portkey(
 
 
 # "rag" is the name of the virtual key on Portkey
-def langchain_llm(feature: str = "rag") -> ChatOpenAI:
+def get_langchain_llm(feature: str = "rag") -> ChatOpenAI:
     """
     Returns a Portkey-backend ChatOpenAI - a drop-in for ChatGroq
 
@@ -60,6 +60,8 @@ def langchain_llm(feature: str = "rag") -> ChatOpenAI:
             }
         )
     )
+    return langchain_llm(feature=feature)
+
 
 # model format is from the documentation
 
@@ -76,4 +78,5 @@ def extract_cache_status(response) -> str:
             if status:
                 return status.upper()
             return "MISS"
+    return "MISS"    # added: fallback when none of the attrs exist
 

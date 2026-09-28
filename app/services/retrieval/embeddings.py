@@ -157,3 +157,5 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
                 time.sleep(1.5)    # rest the model for 1.5 seconds before hitting the API again
 
     return all_embeddings
+
+

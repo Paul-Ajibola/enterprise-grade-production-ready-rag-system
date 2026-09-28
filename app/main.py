@@ -74,10 +74,11 @@ def query(request: QueryRequest):
         return {
             "question": query,  # Fixed: Changed from 'q' to 'query'
             "answer": final_output.get("final_answer"),
-            "thought_answer": final_output.get("plan"),
+            "thought_process": final_output.get("plan"),
             "status": final_output.get("status"),
             "sources": final_output.get("documents", [])
         }
+
     except Exception as e:
         logfire.error(f"Backend Execution Failed: {e}")
         return {

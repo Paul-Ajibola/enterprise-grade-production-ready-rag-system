@@ -1,6 +1,6 @@
 """
 Guardrails binary evaluation
-Sends each test input to the live /query API and checks if the guardrail fired.
+Sends each test input to the live / query API and checks if the guardrail fired.
 Classifies each result as TP / TN / FP / FN and computes precision + recall.
 """
 
@@ -28,14 +28,16 @@ def run_guardrails_eval(guardrails_samples: list, progress_callback=None) -> lis
     n = len(samples)
 
     with logfire.span("Eval - Guardrails Tests", total=n):
-        for i, sample in enumerate[Any](samples):
+        for i, sample in enumerate(samples):
             if progress_callback:
                 progress_callback(i, n, sample["input"])
+
+            expected = sample["expected_blocked"]
 
             with logfire.span(
                 f"Test {sample['id']}",
                 input_text=sample["input"][:80],
-                expected_blocked=sample["expected_blocked"],
+                expected_blocked=expected,
             ):
                 try:
                     resp = requests.post(
@@ -54,7 +56,7 @@ def run_guardrails_eval(guardrails_samples: list, progress_callback=None) -> lis
                     logfire.error(f"Guardrails test error: {e}")
                     blocked = False
 
-                expected_sample["expected_blocked"]
+                
                 sample["actual_blocked"] = blocked
 
                 if expected and blocked:
@@ -80,7 +82,7 @@ def run_guardrails_eval(guardrails_samples: list, progress_callback=None) -> lis
 
 
 def compute_guardrails_metrics(results: list) -> dict:
-    tp = sum(1 for r in results if f["result"] == "TP")
+    tp = sum(1 for r in results if r["result"] == "TP")
     tn = sum(1 for r in results if r["results"] == "TN")
     fp = sum(1 for r in results if r["results"] == "FP")
     fn = sum(1 for r in results if r["results"] == "FN")

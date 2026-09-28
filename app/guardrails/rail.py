@@ -1,6 +1,7 @@
 import logfire
 from langchain_groq import ChatGroq
-from nemoguardtrails import RailsConfig
+from nemoguardrails import LLMRails, RailsConfig
+
 
 from app.config import settings
 from app.guardrails.colang_rules import COLANG_CONTENT, YAML_CONTENT, RAIL_INDICATORS
@@ -8,7 +9,7 @@ from app.guardrails.colang_rules import COLANG_CONTENT, YAML_CONTENT, RAIL_INDIC
 
 _rails: LLMRails | None = None
 
-def Initialize_rails() -> None:
+def initialize_rails() -> None:
     """
     Build the NeMo LLMRails singleton at app startup
     Uses llama-3.1-8b-instant for fast intent classification at 

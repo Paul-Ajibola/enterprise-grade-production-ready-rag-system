@@ -61,3 +61,4 @@ def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[s
         
         # FIXED: Now correctly falls back to the original top_n documents instead of returning None
         return documents[:top_n]
+

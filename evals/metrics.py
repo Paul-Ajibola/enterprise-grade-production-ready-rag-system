@@ -1,5 +1,5 @@
 """
-Phase 2 -- RAGAS + Tool Correctness metrics.
+RAGAS + Tool Correctness metrics.
 Uses JUDGE_GROQ key so production GROQ_API_KEY is never exhausted by eval runs.
 All LLM-based metrics run in batches of 5 with 30s cooldowns between sub-batches
 and 60s cooldowns between experiments - caliberated for Groq's 6,000 TPM on_demand tier.

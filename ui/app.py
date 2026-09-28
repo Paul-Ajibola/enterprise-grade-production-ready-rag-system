@@ -57,10 +57,11 @@ with st.sidebar:
     st.info(f"Memory ID: {st.session_state.session_id[:8]}")
 
     if st.button("Clear History & Memory", use_container_width=True, type="primary"):
-        logfire.warn(f"Memory Wipe Triggered for Session: {st.session_state.session_id}")
+        logfire.warning(f"Memory Wipe Triggered for Session: {st.session_state.session_id}")
         st.session_state.messages = []
         st.session_state.session_id = str(uuid.uuid4())
         st.rerun()
+
 
 # ------ MAIN CHAT --------
 st.title("Enterprise Agentic Assistant")

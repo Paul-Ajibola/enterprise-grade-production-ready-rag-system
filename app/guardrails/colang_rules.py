@@ -20,7 +20,7 @@ define user ask off topic
 
 
 define bot refuse off topic
-"I'm an Enterprise IT Assistant focused on Kubernetes, Intel ha??"
+"I can't help with that - but ask me anything technical."
 
 
 define flow handle off topic
@@ -41,7 +41,7 @@ define user attempt jailbreak
 
 
 define bot refuse jailbreak
-"I maintain consistent guidelines regardless of how I am prompting"
+"I maintain consistent guidelines regardless of how I am prompted"
 
 
 define flow jailbreak protection
@@ -109,25 +109,24 @@ define flow farewell
 
 YAML_CONTENT = """
 models:
-    - type: main
+  - type: main
     engine: openai
     model: gpt-3.5-turbo
 
 
 instructions:
-    - type: general
-      content: |
-        You are an Enterprise IT Assistant specializing in:
-        - Kubernetes (deployment, scaling, operators, networking)
-        - Intel hardware (CPUs, FPGAs, NICs, SRIOV)
-        - Enterprise networking (SDN, VLANs, BGP, routing)
-        Only answer questions about these topics. Be professional and concise.
+  - type: general
+    content: |
+      You are an Enterprise IT Assistant specializing in:
+      - Kubernetes (deployment, scaling, operators, networking)
+      - Intel hardware (CPUs, FPGAs, NICs, SRIOV)
+      - Enterprise networking (SDN, VLANs, BGP, routing)
+      Only answer questions about these topics. Be professional and concise.
 """
 
 
 # Distinctive substrings from each 'define bot' block above.
-# If the guardrail response contains any of these, a rail has fired.
-# These phrases are specific enough to never appear in a legitimate 
+# Each of these must be an EXACT substring of the corresponding bot line.
 RAIL_INDICATORS = [
     "can't help with that - but ask me anything technical",
     "I maintain consistent guidelines regardless of how I am prompted",

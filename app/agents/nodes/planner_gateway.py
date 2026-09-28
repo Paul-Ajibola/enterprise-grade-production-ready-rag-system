@@ -1,6 +1,6 @@
 import logfire
 from app.agents.state import AgentState
-from app.gateway.client import get_langchain_llm
+from app.gateways.client import get_langchain_llm
 
 # Direct Groq call - the LLM Gateway (Portkey routing/fallback/cache)
 llm = get_langchain_llm(feature="planner")

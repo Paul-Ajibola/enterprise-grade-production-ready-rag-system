@@ -28,9 +28,10 @@ def retrieve_node(state: AgentState):
 
     # Properly placed outside the logfire block for final processing
     formatted_docs = [f"CONTENT: {doc}" for doc in reranked_contents]
-    
+
     return {
         "documents": formatted_docs,
         "status": "Found technical context.",
         "plan": state["plan"] + ["Context Retrieved"]
     }
+

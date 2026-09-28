@@ -23,3 +23,4 @@ def chunk_text(text: str, chunk_size: int = 1500, chunk_overlap: int = 200) -> L
         # Log the output count cleanly nested inside your active dashboard span
         logfire.info("Generated chunks count", count=len(valid_chunks))
         return valid_chunks
+
