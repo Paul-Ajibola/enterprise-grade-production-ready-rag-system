@@ -1,5 +1,6 @@
 import logfire
 from portkey_ai import Portkey, createHeaders, PORTKEY_GATEWAY_URL
+from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 
 from app.config import settings
@@ -21,20 +22,21 @@ GATEWAY_CONFIG = {
         "on_status_codes": [429, 503]
     },
     "targets": [
-        {"override_params": {"model": f"@{settings.GROQ_SLUG}//llama-3.3-70b-versatile"}},
-        {"override_params": {"model": f"@{settings.GROQ_SLUG_2}//llama-3.1-8b-instant"}},
+        {"override_params": {"model": f"@{settings.GROQ_SLUG}/llama-3.3-70b-versatile"}},
+        {"override_params": {"model": f"@{settings.GROQ_SLUG_2}/llama-3.1-8b-instant"}},
     ]
 }
 
 
-portkey_client = Portkey(
-    api_key=settings.PORTKEY_API_KEY,
-    config=GATEWAY_CONFIG
+portkey_client = (
+    Portkey(api_key=settings.PORTKEY_API_KEY, config=GATEWAY_CONFIG)
+    if settings.PORTKEY_API_KEY
+    else None
 )
 
 
 # "rag" is the name of the virtual key on Portkey
-def get_langchain_llm(feature: str = "rag") -> ChatOpenAI:
+def get_langchain_llm(feature: str = "rag"):
     """
     Returns a Portkey-backend ChatOpenAI - a drop-in for ChatGroq
 
@@ -45,6 +47,13 @@ def get_langchain_llm(feature: str = "rag") -> ChatOpenAI:
         auth + config). The @rag/model-name format is Portkey-specific -- Groq's own client
         does not understand it. You are still using Groq models; Portkey is just in the middle.
     """
+    if not settings.PORTKEY_API_KEY:
+        return ChatGroq(
+            api_key=settings.GROQ_API_KEY,
+            model=settings.GROQ_MODEL,
+            temperature=0,
+        )
+
     return ChatOpenAI(
         api_key=settings.PORTKEY_API_KEY,
         base_url=PORTKEY_GATEWAY_URL,
@@ -60,7 +69,6 @@ def get_langchain_llm(feature: str = "rag") -> ChatOpenAI:
             }
         )
     )
-    return langchain_llm(feature=feature)
 
 
 # model format is from the documentation

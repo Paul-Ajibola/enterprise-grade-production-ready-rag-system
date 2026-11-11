@@ -1,5 +1,5 @@
 # to ingest the true data, you say:
-python -m app.ingestion.processor DATA/true_data true
+python -m app.ingestion.processor DATA/true true
 
 
 # to ingest the noisy data, you say:

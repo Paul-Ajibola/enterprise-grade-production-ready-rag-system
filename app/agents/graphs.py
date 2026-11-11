@@ -1,9 +1,14 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+import os
+import sqlite3
+from pathlib import Path
+
+from langgraph.checkpoint.sqlite import SqliteSaver
+from app.config import settings
 from app.agents.state import AgentState
-from app.agents.nodes.planner import planner_node
+from app.agents.nodes.planner_gateway import planner_node
 from app.agents.nodes.retriever import retrieve_node
-from app.agents.nodes.responder import generate_node
+from app.agents.nodes.responder_gateway import generate_node
 
 
 # 1. Initialize the State Graph
@@ -39,9 +44,14 @@ workflow.add_edge("retriever", "responder")
 workflow.add_edge("responder", END)
 
 
-# --- MEMORY UPGRADE ----
-# MemorySaver allows the agent to remember conversations
-checkpointer = MemorySaver()
+# Persist thread state across API restarts.
+checkpoint_path = Path(
+    os.path.expanduser(settings.CHECKPOINT_DB_PATH)
+)
+checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+checkpoint_connection = sqlite3.connect(str(checkpoint_path), check_same_thread=False)
+checkpointer = SqliteSaver(checkpoint_connection)
+checkpointer.setup()
 
 
 # compile the Graph with Memory

@@ -1,5 +1,4 @@
 import logfire
-from langchain_groq import ChatGroq
 from nemoguardrails import LLMRails, RailsConfig
 
 
@@ -19,20 +18,13 @@ def initialize_rails() -> None:
 
     global _rails
 
-    guard_llm = ChatGroq(
-        api_key=settings.GROQ_API_KEY,
-        model="llama-3.1-8b-instant",
-        temperature=0
-    )
-
-
     config = RailsConfig.from_content(
         colang_content=COLANG_CONTENT,
         yaml_content=YAML_CONTENT,
     )
 
-    # so, we just pass the rules into the LLM
-    _rails = LLMRails(config, llm=guard_llm)
+    # Use NeMo's built-in OpenAI-compatible client pointed at Groq.
+    _rails = LLMRails(config)
     logfire.info("NeMo Guardrails initialized (llama-3.1-8b-instant)")
 
 
@@ -54,7 +46,8 @@ def guard(message: str) -> tuple[bool, str | None]:
         # NeMo returns {"role": "assistant", "content": "..."}
         content = results.get("content", "") if isinstance(results, dict) else ""
 
-        fired = any(indicator in content for indicator in RAIL_INDICATORS)
+        normalized_content = content.casefold()
+        fired = any(indicator.casefold() in normalized_content for indicator in RAIL_INDICATORS)
 
         if fired:
             logfire.info(f"Guardrails fired | query='{message}' | response='{content}'")

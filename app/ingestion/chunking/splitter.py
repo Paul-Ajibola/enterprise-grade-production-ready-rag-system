@@ -9,7 +9,6 @@ def chunk_text(text: str, chunk_size: int = 1500, chunk_overlap: int = 200) -> L
         if not text.strip():
             return []
 
-        # FIXED: Indented all processing logic inside the Logfire span block
         # Use LangChain to safely handle messy PPT/HTML strings
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,

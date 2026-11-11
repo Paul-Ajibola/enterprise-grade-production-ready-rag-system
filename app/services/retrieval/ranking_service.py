@@ -23,7 +23,7 @@ def get_ranker() -> Ranker:
     return _ranker
 
 
-def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[str]:
+def rerank_documents(query: str, documents: list[dict], top_n: int = 5) -> list[dict]:
     """
     Refines retrieval results by re-scoring documents against the query semantically
     """
@@ -34,11 +34,10 @@ def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[s
     logfire.info(f"[Reranker] Sending {len(documents)} docs to FlashRank Cross-Encoders")
 
     try:
-        # FIXED: Changed from _get_ranker() to match the actual function name
         ranker = get_ranker()
 
         # FlashRank expects a list of dictionaries with 'id' and 'text'
-        passages = [ {"id": i, "text": doc} for i, doc in enumerate(documents)]
+        passages = [{"id": i, "text": doc["content"]} for i, doc in enumerate(documents)]
 
         request = RerankRequest(query=query, passages=passages)
         results = ranker.rerank(request)
@@ -46,9 +45,10 @@ def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[s
         # Results are returned sorted by highest semantic score first
         reranked_docs = []
         for res in results[:top_n]:
-            reranked_docs.append(res["text"])
+            document = dict(documents[int(res["id"])])
+            document["rerank_score"] = res.get("score")
+            reranked_docs.append(document)
 
-        # FIXED: Corrected duration calculation and variable logging
         duration = time.time() - start_time
         top_score = results[0]["score"] if results else "N/A"
         logfire.info(f"[Reranker] Done in {duration:.2f}s. Top semantic score: {top_score}")
@@ -56,9 +56,7 @@ def rerank_documents(query: str, documents: list[str], top_n: int = 5) -> list[s
         return reranked_docs
 
     except Exception as e:
-        # FIXED: Fixed typo in log prefix [reranker]
         logfire.error(f"[Reranker] Semantic Reranking Failed: {e}.")
         
-        # FIXED: Now correctly falls back to the original top_n documents instead of returning None
         return documents[:top_n]
 

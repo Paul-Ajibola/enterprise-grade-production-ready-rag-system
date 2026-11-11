@@ -16,8 +16,6 @@ from app.ingestion.chunking.splitter import chunk_text
 
 logfire.configure(service_name="enterprise_ingestion-service")
 
-clean_args = sys.argv[1:]
-
 PROCESSED_DATA_DIR = "processed_data"
 
 _locked_dim: int | None = None
@@ -40,11 +38,10 @@ def save_processed_locally(data: dict, source_type: str, filename: str) -> str:
     return dest
 
 # function to process file
-def process_file(file_path: str, filename: str, source_type: str):
+def process_file(file_path: str, filename: str, source_type: str) -> str:
     """Parse -> Chunk -> Save Locally -> Embed -> Index in Qdrant"""
     with logfire.span("Processing File", file=filename, source=source_type):
         try:
-            # FIX 1: Correctly extract extension
             ext = filename.split(".")[-1].lower() if "." in filename else ""
 
             # 1. extraction of the txt based on file extension
@@ -59,17 +56,16 @@ def process_file(file_path: str, filename: str, source_type: str):
                 full_text = parse_office(file_path)
             else:
                 logfire.warning(f"Skipping unsupported extension {filename}")
-                return
+                return "skipped"
 
-            # FIX 2: Fixed 'ful_text' spelling typo
             if not full_text or not full_text.strip():
                 logfire.warning(f"No text extracted from {filename} - skipping.")
-                return
+                return "skipped"
 
             # 2. Chunk text
             chunks = chunk_text(full_text)
             if not chunks:
-                return
+                return "skipped"
 
             # 3. Save processed metadata locally
             processed_data = {
@@ -79,13 +75,30 @@ def process_file(file_path: str, filename: str, source_type: str):
             }
 
             local_path = save_processed_locally(processed_data, source_type, filename)
-            # FIX 3: Fixed log.fire.info typo
             logfire.info(f"saved processed data -> {local_path}")
 
             with logfire.span("Vectorizing and Indexing"):
+                active_dim = get_embedding_dim()
+                if _locked_dim is not None and active_dim != _locked_dim:
+                    raise RuntimeError(
+                        f"Active embedding model is {active_dim}-dim but the existing Qdrant "
+                        f"collection is {_locked_dim}-dim. Rebuild the collection with --wipe "
+                        "before ingesting with a different embedding model."
+                    )
+
                 embeddings = embed_texts(chunks)
+                if len(embeddings) != len(chunks):
+                    raise RuntimeError(
+                        f"Created {len(embeddings)} embeddings for {len(chunks)} chunks."
+                    )
+                if _locked_dim is not None and any(
+                    len(vector) != _locked_dim for vector in embeddings
+                ):
+                    raise RuntimeError(
+                        f"Embedding output does not match the {_locked_dim}-dim Qdrant collection. "
+                        "Rebuild the collection with --wipe using the active embedding model."
+                    )
                 
-                # FIX 4: Replaced zip[tuple] syntax with correct standard zip execution
                 points = [
                     models.PointStruct(
                         id=str(uuid.uuid4()),
@@ -104,20 +117,24 @@ def process_file(file_path: str, filename: str, source_type: str):
                     points=points,
                 )
                 logfire.info(f"Ingested {len(points)} points to Qdrant from {filename}.")
+                return "processed"
 
         except Exception as e:
             logfire.error(f"Failed to process {filename}: {e}")
+            return "failed"
 
 
 # function to process directory
 def process_directory(dir_path: str, source_type: str):
     """Process every file in a directory."""
     with logfire.span("Scanning Directory", path=dir_path, source=source_type):
-        # FIX 5: Cleaned up nested isfile checks and dir+path string composition
-        files = [f for f in os.listdir(dir_path) if os.path.isfile(os.path.join(dir_path, f))]
-        logfire.info(f"Found {len(files)} files in {dir_path}.")
-        for filename in files:
-            process_file(os.path.join(dir_path, filename), filename, source_type)
+        counts = {"processed": 0, "skipped": 0, "failed": 0}
+        for root, _, filenames in os.walk(dir_path):
+            logfire.info(f"Found {len(filenames)} files in {root}.")
+            for filename in filenames:
+                result = process_file(os.path.join(root, filename), filename, source_type)
+                counts[result] += 1
+        return counts
 
 
 # function to run universal ingested data
@@ -163,8 +180,11 @@ def run_universal_ingestion(base_dir: str, explicit_source_type: str = None, wip
         # with mixed 3072-dim / 768-dim vectors.
         _locked_dim = dim
 
+        totals = {"processed": 0, "skipped": 0, "failed": 0}
         if explicit_source_type:
-            process_directory(base_dir, explicit_source_type)
+            counts = process_directory(base_dir, explicit_source_type)
+            for key in totals:
+                totals[key] += counts[key]
         else:
             subdirs = [
                 d for d in os.listdir(base_dir)
@@ -173,10 +193,19 @@ def run_universal_ingestion(base_dir: str, explicit_source_type: str = None, wip
 
             if not subdirs:
                 fallback_type = os.path.basename(os.path.normpath(base_dir))
-                process_directory(base_dir, fallback_type)
+                counts = process_directory(base_dir, fallback_type)
+                for key in totals:
+                    totals[key] += counts[key]
             else:
                 for d in subdirs:
-                    process_directory(os.path.join(base_dir, d), d)
+                    counts = process_directory(os.path.join(base_dir, d), d)
+                    for key in totals:
+                        totals[key] += counts[key]
+
+        logfire.info("Ingestion summary", **totals)
+        if totals["failed"]:
+            raise RuntimeError(f"Ingestion had {totals['failed']} failed or unsupported files.")
+        return totals
 
 
 if __name__ == "__main__":
@@ -189,5 +218,9 @@ if __name__ == "__main__":
         print(f"Error: path '{target_dir}' does not exist.")
         sys.exit(1)
 
-    run_universal_ingestion(target_dir, explicit_source_type=explicit_type, wipe=wipe_requested)
-    logfire.info("Ingestion job completed!")
+    try:
+        run_universal_ingestion(target_dir, explicit_source_type=explicit_type, wipe=wipe_requested)
+        logfire.info("Ingestion job completed!")
+    except Exception as e:
+        logfire.error(f"Ingestion job failed: {e}")
+        sys.exit(1)

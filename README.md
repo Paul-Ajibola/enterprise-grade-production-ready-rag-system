@@ -8,12 +8,12 @@ A production-grade, **agentic Retrieval-Augmented Generation (RAG)** system buil
 
 - **🧠 Agentic Planning** — A LangGraph-powered planner node inspects the full conversation history and decides, on every turn, whether the user's message is *conversational* (answerable from memory) or *technical* (requires a fresh knowledge-base search).
 - **🔍 Hybrid Retrieval Pipeline** — Vector search against **Qdrant** followed by **semantic reranking** with FlashRank cross-encoders to surface only the most relevant chunks.
-- **🔁 Resilient, Self-Healing Embeddings** — Automatically probes **Cohere** embeddings on startup; if unreachable or rate-limited, it transparently falls back to a local **sentence-transformers** model, retrying with exponential backoff and re-embedding whole files to avoid mixing embedding dimensions.
-- **💾 Persistent Conversational Memory** — LangGraph's `MemorySaver` checkpointer keeps per-session/thread conversation state so the agent can answer follow-up questions like *"what is my name"* without re-querying the knowledge base.
-- **📄 Multi-Format Ingestion** — Built-in loaders for PDF (with OCR/scanned-page fallback via `pdfplumber`), HTML, plain text, and Office documents (`.docx`, `.pptx`) via `unstructured`.
+- **🔁 Resilient Embeddings** — Uses **Cohere** when its key and API are available, otherwise loads a local **sentence-transformers** model. Ingestion checks the active model dimension against the Qdrant collection and stops with rebuild instructions when they differ.
+- **💾 Persistent Conversational Memory** — LangGraph's SQLite checkpointer stores per-session/thread conversation state across backend restarts. The UI's clear-memory action removes the saved thread.
+- **📄 Multi-Format Ingestion** — Built-in text extraction for PDFs (pypdf with a pdfplumber retry), HTML, plain text, and Office documents (`.docx`, `.pptx`) via `unstructured`. Image-only PDF pages are not OCR-processed.
 - **✂️ Smart Chunking** — Recursive character-based text splitting tuned for RAG retrieval quality.
 - **📊 Full Observability** — Every step (planning, retrieval, reranking, generation, embedding) is wrapped in **Logfire** spans for end-to-end distributed tracing across the ingestion pipeline, the FastAPI backend, and the Streamlit UI.
-- **💬 Streaming Chat UI** — A polished Streamlit front-end with live "agent thinking" status, streamed token-by-token answers, and collapsible source-chunk inspection.
+- **💬 Streaming Chat UI** — A Streamlit front-end with live "agent thinking" status, streamed answer tokens, and collapsible source chunks labeled with their source files.
 - **🗂️ Universal Ingestion CLI** — Point the ingestion script at a directory and it auto-discovers sub-folders as source types, chunks + embeds + upserts everything into Qdrant, with an optional `--wipe` flag to rebuild the collection from scratch.
 
 ---
@@ -92,8 +92,9 @@ Raw Files (PDF / HTML / TXT / DOCX / PPTX)
 
 | Layer | Technology |
 |---|---|
-| Agent Orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) (`StateGraph`, `MemorySaver`) |
+| Agent Orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) (`StateGraph`, SQLite checkpointer) |
 | LLM Inference | [Groq](https://groq.com/) — `llama-3.3-70b-versatile` via `langchain-groq` |
+| Optional LLM Gateway | Portkey routing and fallback when `PORTKEY_API_KEY` is configured; direct Groq otherwise |
 | Vector Database | [Qdrant](https://qdrant.tech/) (cloud cluster) |
 | Embeddings | [Cohere](https://cohere.com/) `embed-english-v3.0` (primary) → `sentence-transformers/all-mpnet-base-v2` (local fallback) |
 | Reranking | [FlashRank](https://github.com/PrithivirajDamodaran/FlashRank) (local ONNX cross-encoder) |
@@ -139,7 +140,7 @@ data/
 │   └── app.py                    # Streamlit chat interface
 ├── DATA/                          # Raw source documents for ingestion (input)
 ├── processed_data/                # JSON snapshots of parsed/chunked docs (output)
-├── main.py                        # FastAPI app entrypoint (/, /query, /graph)
+├── app/main.py                    # FastAPI app entrypoint (/, /query, /query/stream, /graph)
 ├── .env                           # Environment variables (not committed)
 ├── .gitignore
 ├── .python-version
@@ -159,13 +160,11 @@ data/
 Create a `.env` file at the project root with the following keys:
 
 ```env
-# LLM Gateway
+# LLM
 GROQ_API_KEY=your_groq_api_key
-GROQ_FALLBACK_API_KEY=your_groq_fallback_key
 
 # Embeddings
 COHERE_API_KEY=your_cohere_api_key
-GEMINI_API_KEY=your_gemini_api_key
 
 # Vector Database
 QDRANT_CLUSTER_ENDPOINT=https://your-cluster-url.qdrant.io
@@ -176,18 +175,21 @@ LOGFIRE_TOKEN=your_logfire_write_token
 
 # Streamlit UI -> FastAPI backend
 BACKEND_URL=http://localhost:8000
+CHECKPOINT_DB_PATH=~/.enterprise-rag/checkpoints.sqlite
+PORTKEY_API_KEY= # Optional; omit to call Groq directly
 ```
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `GROQ_API_KEY` | ✅ | Powers the planner and responder LLM nodes |
-| `GROQ_FALLBACK_API_KEY` | ⚠️ Recommended | Backup key for Groq rate-limit resilience |
-| `COHERE_API_KEY` | ✅ | Primary embedding model for ingestion & querying |
-| `GEMINI_API_KEY` | Optional | Reserved for Gemini-based embeddings |
+| `GROQ_API_KEY` | ✅ | Powers planner, responder, and guardrails when Portkey is not configured |
+| `COHERE_API_KEY` | Optional | Preferred embedding provider; local sentence-transformers is the fallback |
 | `QDRANT_CLUSTER_ENDPOINT` | ✅ | Qdrant Cloud cluster URL |
 | `QDRANT_API_KEY` | ✅ | Qdrant Cloud authentication |
 | `LOGFIRE_TOKEN` | ⚠️ Recommended | Enables distributed tracing/observability |
-| `BACKEND_URL` | ✅ (UI only) | Where the Streamlit app sends `/query` requests |
+| `BACKEND_URL` | ✅ (UI only) | Base URL for the FastAPI backend |
+| `CHECKPOINT_DB_PATH` | Optional | SQLite file used to persist conversation threads |
+| `PORTKEY_API_KEY` | Optional | Enables Portkey routing; direct Groq is used when it is omitted |
+| `JUDGE_GROQ` | Optional | Separate Groq key for RAG metric evaluations |
 
 ---
 
@@ -232,11 +234,13 @@ Supported file types: `.pdf`, `.html` / `.htm`, `.txt`, `.docx`, `.pptx`.
 ### 4. Start the FastAPI Backend
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 - `GET /` — Health check
 - `POST /query` — Main agent endpoint (`{ "q": "...", "thread_id": "..." }`)
+- `POST /query/stream` — Server-sent event stream with answer tokens and final sources
+- `DELETE /threads/{thread_id}` — Deletes the saved conversation for a session
 - `GET /graph` — Returns a PNG diagram of the compiled LangGraph workflow
 
 ### 5. Launch the Streamlit UI
@@ -247,15 +251,25 @@ streamlit run ui/app.py
 
 Open the local URL Streamlit prints (typically `http://localhost:8501`) and start chatting. The UI will:
 - Show live "Agent is thinking…" status with the agent's plan steps
-- Stream the final answer character-by-character
+- Stream answer tokens as the backend generates them
 - Let you expand and inspect each retrieved source chunk
 - Let you clear memory/session state via the sidebar
+
+### 6. Run the Evaluation Dashboard
+
+With the backend running, launch the separate evaluation UI:
+
+```bash
+streamlit run evals/streamlit_app.py
+```
+
+It can run the live query pipeline, guardrail checks, and RAG quality metrics. Metric scoring requires `JUDGE_GROQ` or `GROQ_API_KEY`.
 
 ---
 
 ## 🔍 Design Notes & Resilience Patterns
 
-- **Dimension-safe embedding fallback**: If Cohere rate-limits mid-batch, the system doesn't silently mix 1024-dim and 768-dim vectors. Instead, it discards partial results and **re-embeds the entire file** with the local fallback model, guaranteeing a dimensionally consistent set of vectors per ingestion run.
+- **Dimension-safe embedding fallback**: If Cohere rate-limits mid-batch, the system discards partial results and re-embeds the whole file with the local fallback model. If that model does not match the collection dimension, ingestion stops with instructions to rebuild the collection using `--wipe`.
 - **Collection dimension locking**: When re-running ingestion against an existing Qdrant collection (without `--wipe`), the pipeline reads the *actual* configured vector size from Qdrant rather than assuming it matches whichever embedding model happens to be active, preventing silent corruption.
 - **Graceful reranker fallback**: If FlashRank reranking fails for any reason, the system falls back to returning the original top-N retrieved documents rather than failing the whole request.
 - **Conversational memory boundary**: The planner explicitly separates "answerable from memory" vs. "needs fresh retrieval" queries, avoiding unnecessary vector search calls for greetings or follow-up questions about prior turns.

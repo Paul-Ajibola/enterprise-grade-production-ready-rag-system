@@ -3,8 +3,7 @@ from app.agents.state import AgentState
 from app.config import settings
 from langchain_groq import ChatGroq
 
-# Direct Groq call - the LLM Gateway 
-# (Portkey routing/fallback/caching) will arrive in a later stage
+# Direct Groq response node used when Portkey is not configured or unavailable.
 llm = ChatGroq(api_key=settings.GROQ_API_KEY, model=settings.GROQ_MODEL, temperature=0.1)
 #  lower temperature because it is preferably to be deterministic, than probabilistic
 
@@ -42,27 +41,60 @@ def generate_node(state: AgentState):
         full_context = ""
 
         for doc in state["documents"]:
-            if len(full_context) + len(doc) < max_context_chars:
-                full_context += doc + "\n\n"
+            if isinstance(doc, dict):
+                source = doc.get("source", "Unknown source")
+                content = doc.get("content", "")
+                rendered_doc = f"Source: {source}\n{content}"
+            else:
+                rendered_doc = str(doc)
+            if len(full_context) + len(rendered_doc) < max_context_chars:
+                full_context += rendered_doc + "\n\n"
             else:
                 logfire.warning("Context truncated to fit Groq TPM limits")
                 break
 
-        # Fixed: Moved out of the loop so it executes correctly
-        prompt = f"""
-        You are a Senior Technical Architect.
-        Answer the question using the TECHNICAL CONTEXT provided.
+        if not full_context:
+            prompt = f"""
+            You are a Senior Technical Architect. The knowledge base returned no relevant context.
+            Tell the user you could not find supporting documentation and ask them to refine the question.
+            Do not invent technical facts.
 
-        TECHNICAL CONTEXT:
-        {full_context}
+            CONVERSATION HISTORY:
+            {history_str}
 
-        CONVERSATION HISTORY
-        "{user_msg}"
-        """
+            LATEST USER MESSAGE:
+            {user_msg}
+            """
+        else:
+            prompt = f"""
+            You are a Senior Technical Architect. Answer using the supplied technical context.
+            Include the source filename when it helps identify where a fact came from.
+            If the context does not support an answer, say so instead of guessing.
+
+            TECHNICAL CONTEXT:
+            {full_context}
+
+            CONVERSATION HISTORY:
+            {history_str}
+
+            LATEST USER MESSAGE:
+            {user_msg}
+            """
 
     with logfire.span("LLM Synthesis"):
         try:
-            content = llm.invoke(prompt).content
+            content_parts = []
+            for chunk in llm.stream(prompt):
+                chunk_content = chunk.content
+                if isinstance(chunk_content, str):
+                    content_parts.append(chunk_content)
+                elif isinstance(chunk_content, list):
+                    content_parts.extend(
+                        block.get("text", "")
+                        for block in chunk_content
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    )
+            content = "".join(content_parts)
             logfire.info("Response synthesized via LLM.")
 
             return {

@@ -111,7 +111,11 @@ YAML_CONTENT = """
 models:
   - type: main
     engine: openai
-    model: gpt-3.5-turbo
+    model: llama-3.1-8b-instant
+    api_key_env_var: GROQ_API_KEY
+    parameters:
+      base_url: https://api.groq.com/openai/v1
+      temperature: 0
 
 
 instructions:
@@ -131,8 +135,8 @@ RAIL_INDICATORS = [
     "can't help with that - but ask me anything technical",
     "I maintain consistent guidelines regardless of how I am prompted",
     "Hello! I'm your Enterprise IT Assistant",
-    "Goodbye! Feel free to return whenever you have more enterprise questions",
-    "I'm an Enterprise AI Assistant with deep expertise in",
+    "Goodbye! Feel free to return whenever you have more enterprise IT questions",
+    "I'm an Enterprise IT Assistant with deep expertise in:",
 ]
 
 

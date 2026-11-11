@@ -9,10 +9,11 @@ class AgentState(TypedDict):
     # are appended to the history rather than replaced.
     messages: Annotated[List[dict], operator.add]
     current_query: str
-    documents: List[str]
+    documents: List[dict]
     plan: List[str]
     status: str
     final_answer: str
+    streaming: bool
 
 
 

@@ -1,22 +1,20 @@
 import time
 import logfire
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.config import settings
 from langchain_cohere import CohereEmbeddings
 
 
 BATCH_SIZE = 50
-_GEMINI_DIM = 3072   # gemini's dimension
 _COHERE_DIM = 1024     # cohere v3 default dimension
 _FALLBACK_DIM = 768   # all-mpnet-base-v2
 
 
 _active_model = None
-_model_type: str | None = None   # "gemini" or "fallback"
+_model_type: str | None = None   # "cohere" or "fallback"
 
 
 def _probe_cohere():
-    """Try one embed call to verify Gemini is reachable. Returns model or None."""
+    """Try one embed call to verify Cohere is reachable. Returns model or None."""
     try:
         model = CohereEmbeddings(
             model="embed-english-v3.0",
@@ -52,13 +50,7 @@ def _init():
 
 
 def get_embedding_dim() -> int:
-    """Returns the vector dimension for the currently active model.
-    IMPORTANT: because the active model can switch mid-run (gemini -> fallback),
-    callers that need to pick a Qdrant collection for a given file's vectors
-    should call this AFTER embed_texts() returns for that file, not before —
-    otherwise you may size/select the wrong collection if a switch happened
-    during that call.
-    """
+    """Return the current provider's vector size; rate-limit fallback can change it mid-process."""
     _init()
     return _COHERE_DIM if _model_type == "cohere" else _FALLBACK_DIM
 
@@ -67,7 +59,7 @@ def _switch_to_fallback():
     """Permanently switch to sentence-transformers for the remainder of this process."""
     global _active_model, _model_type
     logfire.warning(
-        "Gemini rate limit persisted after max retries - "
+        "Cohere rate limit persisted after max retries - "
         "switching to sentence-transformers fallback for the remainder of this run."
     )
     _active_model = _load_fallback()
@@ -138,8 +130,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             batch_embeddings = _embed_batch(batch)
 
             if _model_type != model_before:
-                # Switched from gemini -> fallback partway through this call.
-                # Everything embedded so far in all_embeddings is 3072-dim;
+                # Switched from Cohere -> fallback partway through this call.
+                # Everything embedded so far in all_embeddings is 1024-dim;
                 # the fallback model produces 768-dim. Discard the partial
                 # results and re-embed this WHOLE file's texts with the
                 # fallback model so embed_texts() always returns a single,

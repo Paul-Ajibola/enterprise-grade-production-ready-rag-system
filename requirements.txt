@@ -1,68 +1,42 @@
-#----CORE API AND WEB FRAMEWORK
+# API, UI, and configuration
+fastapi
 uvicorn[standard]
+streamlit
 python-dotenv
-requests         # for HTTP library for internal or external API calls
-numpy            # for numerical operations and array manipulation
-pandas           # for data manipulation and analysis  
+requests
 
+# LangChain, LangGraph, and LLM providers
+langchain
+langgraph
+langgraph-checkpoint-sqlite
+langchain-groq
+langchain-openai
+langchain-cohere
+portkey-ai
 
-# ----- GEMINI EMBEDDINGS --------
-google-generativeai         # Gemini API -- embeddings (text-embedding
-langchain-google-genai    # LangChain integration for Gemini models
-sentence-transformers    # local fallback embedding model if the Gemini API is unavailable 
-
-
-# -----VECTOR DB & RETRIEVAL ------
-qdrant-client          # Vector DB for semantic search
-
-
-# ----- LANGCHAIN AND AGENTIC ORCHESTRATION ----
-langchain     # Core LLM orchestration
-langgraph     # State-machine logic
-langchain-groq    
-pydantic>=2.0.0             # Data validation and setting
-
-
-# -------- CORE API AND WEB FRAMEWORK ----------
-fastapi      # High-performance web framework
-streamlit      # Frontend chat interface
-
-
-# -----DATA INGESTION AND DOCUMENT PARSING
-unstructured>=0.22.0       # Advanced PDF parsing and text extraction    
-python-pptx        # For .ppt and .pptx file extraction 
-python-docx        # For .docx file extraction
-pypdf             # For PDF document parsing and text extraction
-beautifulsoup4      # For HTML content parsing   
-pdfplumber          # fallback PDF parser for scanned/complex layouts
-langchain-text-splitters    # For splitting documents for chunking
-
-
-# ------ OBSERVABILITY & DISTRIBUTED TRACING -------
-logfire[fastapi,requests]       # Pydantic logfire - traces the ingestion pipeline
-loguru                          # Enhanced logging for python
-langsmith                       # Specialized tracking for LangChain/LangGraph
-
-
-# RERANKING IN RAG
+# Vector retrieval, embeddings, and reranking
+qdrant-client
+sentence-transformers
 flashrank
 
-# ADD UVICORN FOR BACKEND PROCESS (FASTAPI)
+# Document ingestion
+unstructured>=0.22.0
+python-pptx
+python-docx
+pypdf
+pdfplumber
+beautifulsoup4
+langchain-text-splitters
 
+# NeMo guardrails providers
+nemoguardrails
+langchain-nvidia-ai-endpoints
+langchain-google-vertexai
 
-# ------ GUARDRAILS ------
-nemoguardrails                    # NVIDIA NeMo Guardrails for input/output
-langchain-nvidia-ai-endpoints     # Langchain integration with nvidia
-langchain-google-vertexai         # required shim for NeMo Guardrails
-
-
-# ----- LLM GATEWAY -------
-portkey-ai              # Portkey Gateway for unified LLM routing
-
-# ---- EVALUATION (EVALS) -----------
-ragas                          # RAG-specific evaluation metircs (Faithfulness, Relevancy, Recall)
-deepeval                       # Pytest-compatible test runner wrapping RAGAS & safety metrics
-langfuse                       # Live production monitoring, tracing & user feedback collection
-openai                         # AsyncOpenAI client used directly by the RAGAS judge LLM
-
-
+# Observability and evaluations
+logfire[fastapi,requests]
+langsmith
+ragas
+openai
+pandas
+numpy

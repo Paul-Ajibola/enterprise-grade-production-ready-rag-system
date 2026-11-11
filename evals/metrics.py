@@ -1,8 +1,8 @@
 """
 RAGAS + Tool Correctness metrics.
 Uses JUDGE_GROQ key so production GROQ_API_KEY is never exhausted by eval runs.
-All LLM-based metrics run in batches of 5 with 30s cooldowns between sub-batches
-and 60s cooldowns between experiments - caliberated for Groq's 6,000 TPM on_demand tier.
+ LLM-based metrics run one sample at a time with cooldowns between samples and experiments
+ to reduce the chance of exceeding the judge model's rate limit.
 Contexts are truncated to 300 chars (2 chunks max) so no single request exceeds the limit.
 """
 
@@ -15,7 +15,6 @@ from openai import AsyncOpenAI
 
 from ragas.llms import llm_factory
 from ragas.embeddings import HuggingFaceEmbeddings
-from ragas import SingleTurnSample
 from ragas.metrics.collections import (
     Faithfulness,
     AnswerRelevancy,
@@ -36,6 +35,8 @@ CONTEXT_LIMIT = 2       # number of context chunks passed to RAGAS per sample
 
 def _build_judge():
     api_key = os.getenv("JUDGE_GROQ") or os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("Set JUDGE_GROQ or GROQ_API_KEY before running LLM evaluation metrics.")
     client = AsyncOpenAI(api_key=api_key, base_url=GROQ_BASE_URL)
     llm = llm_factory(JUDGE_MODEL, provider="openai", client=client)
     embeddings = HuggingFaceEmbeddings(
@@ -49,8 +50,7 @@ async def _cooldown(seconds: int, label: str, status_cb=None):
     msg = f"⏳ {seconds}s cooldown after {label} (Groq TPM buffer)..."
     if status_cb:
         status_cb(msg)
-    for _ in range(seconds // 10):
-        await asyncio.sleep(10)
+    await asyncio.sleep(seconds)
     if status_cb:
         status_cb(f"✅ Ready — starting next experiment.")
         
@@ -65,11 +65,14 @@ def _prep_samples(golden_dataset: dict) -> list:
     """
     valid = []
     for s in golden_dataset["rag_samples"]:
-        response = s.get("actual_response", "").strip()
+        response = str(s.get("actual_response") or "").strip()
         if not response:
             continue
-        raw_contexts = s.get("actual_contexts") or s.get("relevant_contexts") or []
-        contexts = [c[:CONTEXT_TRUNCATE] for c in raw_contexts[:CONTEXT_LIMIT]]
+        raw_contexts = s.get("actual_contexts") or []
+        contexts = [
+            (c.get("content", "") if isinstance(c, dict) else str(c))[:CONTEXT_TRUNCATE]
+            for c in raw_contexts[:CONTEXT_LIMIT]
+        ]
         valid.append({**s, "actual_contexts": contexts})
     return valid
 
@@ -78,6 +81,17 @@ def _score_df(metric_key: str, samples: list, scores) -> pd.DataFrame:
     return pd.DataFrame([
         {"question": s["question"][:65], metric_key: round(float(r.value), 3)}
         for s, r in zip(samples, scores)
+    ])
+
+
+def _score_df_with_missing_contexts(metric_key: str, all_samples: list, scored_samples: list, scores) -> pd.DataFrame:
+    score_by_sample = {
+        id(sample): round(float(score.value), 3)
+        for sample, score in zip(scored_samples, scores)
+    }
+    return pd.DataFrame([
+        {"question": sample["question"][:65], metric_key: score_by_sample.get(id(sample), 0.0)}
+        for sample in all_samples
     ])
 
 
@@ -106,6 +120,7 @@ async def run_all_metrics(golden_dataset: dict, status_cb=None) -> dict:
 
     if not samples:
         raise ValueError("No samples with actual_response found. Run Phase 1 first.")
+    context_samples = [sample for sample in samples if sample["actual_contexts"]]
 
     results = {}
 
@@ -121,10 +136,10 @@ async def run_all_metrics(golden_dataset: dict, status_cb=None) -> dict:
                     "response": s["actual_response"],
                     "retrieved_contexts": s["actual_contexts"],
                 }
-                for s in samples
+                for s in context_samples
             ]
-            scores = await _batched_score(Faithfulness(llm=judge_llm), inputs, samples, status_cb, "Faithfulness")
-            df = _score_df("faithfulness", samples, scores)
+            scores = await _batched_score(Faithfulness(llm=judge_llm), inputs, context_samples, status_cb, "Faithfulness")
+            df = _score_df_with_missing_contexts("faithfulness", samples, context_samples, scores)
             results["faithfulness"] = df
             logfire.info("🧪 Faithfulness done", avg=round(df["faithfulness"].mean(), 3))
 
@@ -158,10 +173,10 @@ async def run_all_metrics(golden_dataset: dict, status_cb=None) -> dict:
                     "reference": s["reference"],
                     "retrieved_contexts": s["actual_contexts"],
                 }
-                for s in samples
+                    for s in context_samples
             ]
-            scores = await _batched_score(ContextPrecision(llm=judge_llm), inputs, samples, status_cb, "Context Precision")
-            df = _score_df("context_precision", samples, scores)
+            scores = await _batched_score(ContextPrecision(llm=judge_llm), inputs, context_samples, status_cb, "Context Precision")
+            df = _score_df_with_missing_contexts("context_precision", samples, context_samples, scores)
             results["context_precision"] = df
             logfire.info("🧪 Context Precision done", avg=round(df["context_precision"].mean(), 3))
 
@@ -177,10 +192,10 @@ async def run_all_metrics(golden_dataset: dict, status_cb=None) -> dict:
                     "reference": s["reference"],
                     "retrieved_contexts": s["actual_contexts"],
                 }
-                for s in samples
+                    for s in context_samples
             ]
-            scores = await _batched_score(ContextRecall(llm=judge_llm), inputs, samples, status_cb, "Context Recall")
-            df = _score_df("context_recall", samples, scores)
+            scores = await _batched_score(ContextRecall(llm=judge_llm), inputs, context_samples, status_cb, "Context Recall")
+            df = _score_df_with_missing_contexts("context_recall", samples, context_samples, scores)
             results["context_recall"] = df
             logfire.info("🧪 Context Recall done", avg=round(df["context_recall"].mean(), 3))
 
@@ -188,7 +203,7 @@ async def run_all_metrics(golden_dataset: dict, status_cb=None) -> dict:
 
         # ── Exp 5: Answer Correctness (split into batches) ────────────────────
         if status_cb:
-            status_cb(f"🧪 Exp 5/6 — Answer Correctness batch 1/2...")
+            status_cb(f"🧪 Exp 5/6 — Answer Correctness ({len(samples)} samples)...")
         with logfire.span("🧪 Exp 5 — Answer Correctness"):
             inputs = [
                 {
