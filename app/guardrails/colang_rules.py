@@ -5,22 +5,22 @@
 
 COLANG_CONTENT = """
 define user ask off topic
-"tell me a joke"
-"what is a joke"
-"what is the capital of france"
-"write a poem"
-"what is 2 plus 2"
-"what should I eat for dinner"
-"who won the game yesterday"
-"recommend a movie"
-"what is the weather today"
-"can you help me with math homework"
-"tell me about world history"
-"what is the best restaurant near me"
+    "tell me a joke"
+    "what is a joke"
+    "what is the capital of france"
+    "write a poem"
+    "what is 2 plus 2"
+    "what should I eat for dinner"
+    "who won the game yesterday"
+    "recommend a movie"
+    "what is the weather today"
+    "can you help me with math homework"
+    "tell me about world history"
+    "what is the best restaurant near me"
 
 
 define bot refuse off topic
-"I can't help with that - but ask me anything technical."
+    "I can't help with that - but ask me anything technical."
 
 
 define flow handle off topic
@@ -41,7 +41,7 @@ define user attempt jailbreak
 
 
 define bot refuse jailbreak
-"I maintain consistent guidelines regardless of how I am prompted"
+    "I maintain consistent guidelines regardless of how I am prompted"
 
 
 define flow jailbreak protection
@@ -60,7 +60,7 @@ define user express greeting
 
 
 define bot express greeting
-   "Hello! I'm your Enterprise IT Assistant I specialize in Kubernetes"
+    "Hello! I'm your Enterprise IT Assistant I specialize in Kubernetes"
 
 
 define flow greeting
